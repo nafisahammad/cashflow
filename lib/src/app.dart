@@ -11,14 +11,38 @@ class CashFlowApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final startup = ref.watch(appStartupProvider);
+    final settingsState = ref.watch(appSettingsProvider);
+    final settings = settingsState.valueOrNull;
 
     return MaterialApp(
       title: 'CashFlow',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F766E)),
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFA4E86A),
+          brightness: Brightness.light,
+        ),
         useMaterial3: true,
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: const Color(0xFFF6F8F4),
+        cardTheme: CardThemeData(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: Colors.white,
+        ),
       ),
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFFA4E86A),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        scaffoldBackgroundColor: const Color(0xFF0B0D10),
+        cardTheme: CardThemeData(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          color: const Color(0xFF1C1F24),
+        ),
+      ),
+      themeMode: settings?.themeMode ?? ThemeMode.light,
       home: startup.when(
         data: (_) {
           final authState = ref.watch(authStateProvider);
