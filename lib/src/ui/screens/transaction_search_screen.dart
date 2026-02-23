@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../data/models/finance_transaction.dart';
 import '../../data/models/transaction_type.dart';
 import '../../providers.dart';
+import 'transaction_detail_screen.dart';
 
 const _searchPlaceholder = 'Search transactions, date, time';
 
@@ -95,6 +96,14 @@ class _TransactionSearchScreenState extends ConsumerState<TransactionSearchScree
                       final isIncome = tx.type == TransactionType.income.value;
                       return Card(
                         child: ListTile(
+                          onTap: () {
+                            Navigator.of(context).push<bool>(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    TransactionDetailScreen(transaction: tx),
+                              ),
+                            );
+                          },
                           leading: CircleAvatar(
                             backgroundColor: isIncome
                                 ? const Color(0x3326A653)

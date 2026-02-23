@@ -10,6 +10,7 @@ import '../data/models/transaction_type.dart';
 import '../providers.dart';
 import '../tour/screens/tour_list_screen.dart';
 import 'screens/add_transaction_screen.dart';
+import 'screens/transaction_detail_screen.dart';
 import 'screens/transaction_search_screen.dart';
 
 class HomeShell extends ConsumerStatefulWidget {
@@ -165,7 +166,11 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
           ]
         : filteredRecent
               .map(
-                (tx) => _TransactionTile(transaction: tx, formatter: formatter),
+                (tx) => _TransactionTile(
+                  transaction: tx,
+                  formatter: formatter,
+                  onTap: () => _openTransactionDetails(tx),
+                ),
               )
               .toList(growable: false);
 
@@ -365,6 +370,14 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
   void _showNotificationHint() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Notifications panel will be added next.')),
+    );
+  }
+
+  Future<void> _openTransactionDetails(FinanceTransaction transaction) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => TransactionDetailScreen(transaction: transaction),
+      ),
     );
   }
 
@@ -919,6 +932,7 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
                     child: _TransactionTile(
                       transaction: tx,
                       formatter: formatter,
+                      onTap: () => _openTransactionDetails(tx),
                     ),
                   ),
                 ),
@@ -936,6 +950,14 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
   void _showNotificationHint() {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Notifications panel will be added next.')),
+    );
+  }
+
+  Future<void> _openTransactionDetails(FinanceTransaction transaction) async {
+    await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => TransactionDetailScreen(transaction: transaction),
+      ),
     );
   }
 
@@ -1334,15 +1356,21 @@ class _SettingsPage extends ConsumerWidget {
 }
 
 class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({required this.transaction, required this.formatter});
+  const _TransactionTile({
+    required this.transaction,
+    required this.formatter,
+    this.onTap,
+  });
 
   final FinanceTransaction transaction;
   final NumberFormat formatter;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final isIncome = transaction.type == TransactionType.income.value;
     return ListTile(
+      onTap: onTap,
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
         backgroundColor: isIncome

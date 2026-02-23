@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers.dart';
 import '../data/tour_repository.dart';
 import '../models/settlement.dart';
+import '../models/settlement_payment.dart';
 import '../models/tour.dart';
 import '../models/tour_member.dart';
 import '../models/tour_transaction.dart';
@@ -56,6 +57,12 @@ final tourTransactionsProvider =
 
 final tourTransactionProvider = tourTransactionsProvider;
 
+final tourSettlementPaymentsProvider =
+    StreamProvider.family<List<SettlementPayment>, String>((ref, tourId) async* {
+      await ref.watch(appStartupProvider.future);
+      yield* ref.read(tourRepositoryProvider).streamSettlementPayments(tourId);
+    });
+
 final tourTotalExpensesProvider = Provider.family<AsyncValue<double>, String>((
   ref,
   tourId,
@@ -72,15 +79,25 @@ final settlementProvider = Provider.family<AsyncValue<TourSettlement>, String>((
 ) {
   final tourState = ref.watch(tourByIdProvider(tourId));
   final txState = ref.watch(tourTransactionsProvider(tourId));
-  return switch ((tourState, txState)) {
-    (AsyncData(value: final tour?), AsyncData(value: final txs)) => AsyncData(
-      _computeSettlement(tour, txs),
-    ),
-    (AsyncError(:final error, :final stackTrace), _) => AsyncError(
+  final paymentsState = ref.watch(tourSettlementPaymentsProvider(tourId));
+  return switch ((tourState, txState, paymentsState)) {
+    (
+      AsyncData(value: final tour?),
+      AsyncData(value: final txs),
+      AsyncData(value: final payments),
+    ) =>
+      AsyncData(
+        _computeSettlement(tour, txs, payments),
+      ),
+    (AsyncError(:final error, :final stackTrace), _, _) => AsyncError(
       error,
       stackTrace,
     ),
-    (_, AsyncError(:final error, :final stackTrace)) => AsyncError(
+    (_, AsyncError(:final error, :final stackTrace), _) => AsyncError(
+      error,
+      stackTrace,
+    ),
+    (_, _, AsyncError(:final error, :final stackTrace)) => AsyncError(
       error,
       stackTrace,
     ),
@@ -88,21 +105,11 @@ final settlementProvider = Provider.family<AsyncValue<TourSettlement>, String>((
   };
 });
 
-final individualExpenseProvider =
-    Provider.family<AsyncValue<Map<String, double>>, String>((ref, tourId) {
-      final txState = ref.watch(tourTransactionsProvider(tourId));
-      return txState.whenData((txs) {
-        final totalByUser = <String, double>{};
-        for (final tx in txs) {
-          for (final sharer in tx.sharers) {
-            totalByUser[sharer] = (totalByUser[sharer] ?? 0) + tx.perHeadAmount;
-          }
-        }
-        return totalByUser;
-      });
-    });
-
-TourSettlement _computeSettlement(Tour tour, List<TourTransaction> txs) {
+TourSettlement _computeSettlement(
+  Tour tour,
+  List<TourTransaction> txs,
+  List<SettlementPayment> payments,
+) {
   final raw = <String, Map<String, double>>{};
   for (final tx in txs) {
     for (final sharer in tx.sharers) {
@@ -132,6 +139,15 @@ TourSettlement _computeSettlement(Tour tour, List<TourTransaction> txs) {
         row[a] = -net;
       }
     }
+  }
+
+  for (final payment in payments) {
+    _applySettlementPayment(
+      normalized: normalized,
+      fromUserId: payment.fromUserId,
+      toUserId: payment.toUserId,
+      amount: payment.amount,
+    );
   }
 
   final transfers = <SettlementTransfer>[];
@@ -175,3 +191,49 @@ TourSettlement _computeSettlement(Tour tour, List<TourTransaction> txs) {
 
   return TourSettlement(transfers: transfers, members: memberMap);
 }
+
+void _applySettlementPayment({
+  required Map<String, Map<String, double>> normalized,
+  required String fromUserId,
+  required String toUserId,
+  required double amount,
+}) {
+  if (amount <= 0) {
+    return;
+  }
+
+  const epsilon = 0.000001;
+  var remaining = amount;
+  final fromTo = normalized[fromUserId]?[toUserId] ?? 0;
+  if (fromTo > 0) {
+    if (fromTo > remaining + epsilon) {
+      normalized[fromUserId]![toUserId] = fromTo - remaining;
+      return;
+    }
+    normalized[fromUserId]!.remove(toUserId);
+    if (normalized[fromUserId]!.isEmpty) {
+      normalized.remove(fromUserId);
+    }
+    remaining -= fromTo;
+  }
+
+  if (remaining <= epsilon) {
+    return;
+  }
+
+  final reverseRow = normalized.putIfAbsent(toUserId, () => <String, double>{});
+  reverseRow[fromUserId] = (reverseRow[fromUserId] ?? 0) + remaining;
+}
+final individualExpenseProvider =
+    Provider.family<AsyncValue<Map<String, double>>, String>((ref, tourId) {
+      final txState = ref.watch(tourTransactionsProvider(tourId));
+      return txState.whenData((txs) {
+        final totalByUser = <String, double>{};
+        for (final tx in txs) {
+          for (final sharer in tx.sharers) {
+            totalByUser[sharer] = (totalByUser[sharer] ?? 0) + tx.perHeadAmount;
+          }
+        }
+        return totalByUser;
+      });
+    });

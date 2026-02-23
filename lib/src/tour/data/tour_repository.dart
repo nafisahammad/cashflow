@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/settlement.dart';
+import '../models/settlement_payment.dart';
 import '../models/tour.dart';
 import '../models/tour_member.dart';
 import '../models/tour_split_type.dart';
@@ -60,6 +61,19 @@ class TourRepository {
         .map(
           (snapshot) => snapshot.docs
               .map((doc) => _transactionFromDoc(tourId, doc))
+              .toList(growable: false),
+        );
+  }
+
+  Stream<List<SettlementPayment>> streamSettlementPayments(String tourId) {
+    return _tours
+        .doc(tourId)
+        .collection('settlements')
+        .orderBy('date', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs
+              .map((doc) => _settlementPaymentFromDoc(tourId, doc))
               .toList(growable: false),
         );
   }
@@ -265,6 +279,94 @@ class TourRepository {
     });
   }
 
+  Future<void> updateTransaction({
+    required String tourId,
+    required String transactionId,
+    required String contributorId,
+    required double amount,
+    required List<String> sharers,
+    required DateTime date,
+    required String note,
+  }) async {
+    if (amount <= 0) {
+      throw ArgumentError('Amount must be greater than zero.');
+    }
+    if (sharers.isEmpty) {
+      throw ArgumentError('At least one sharer is required.');
+    }
+
+    final tour = await getTourById(tourId);
+    if (tour == null) {
+      throw StateError('Tour not found.');
+    }
+
+    final memberSet = tour.members.toSet();
+    if (!memberSet.contains(contributorId)) {
+      throw ArgumentError('Contributor must be a tour member.');
+    }
+
+    final normalizedSharers = <String>{...sharers, contributorId}.toList(
+      growable: false,
+    );
+    final allSharersExist = normalizedSharers.every(memberSet.contains);
+    if (!allSharersExist) {
+      throw ArgumentError('Sharers must be tour members.');
+    }
+
+    final perHead = amount / normalizedSharers.length;
+    await _tours.doc(tourId).collection('transactions').doc(transactionId).update({
+      'contributorId': contributorId,
+      'totalAmount': amount,
+      'splitType': TourSplitType.equal.name,
+      'sharers': normalizedSharers,
+      'perHeadAmount': perHead,
+      'date': Timestamp.fromDate(date),
+      'note': note.trim(),
+    });
+  }
+
+  Future<void> deleteTransaction({
+    required String tourId,
+    required String transactionId,
+  }) async {
+    await _tours.doc(tourId).collection('transactions').doc(transactionId).delete();
+  }
+
+  Future<void> addSettlementPayment({
+    required String tourId,
+    required String fromUserId,
+    required String toUserId,
+    required double amount,
+    required DateTime date,
+    String? note,
+  }) async {
+    if (amount <= 0) {
+      throw ArgumentError('Amount must be greater than zero.');
+    }
+    if (fromUserId == toUserId) {
+      throw ArgumentError('Payer and receiver must be different.');
+    }
+
+    final tour = await getTourById(tourId);
+    if (tour == null) {
+      throw StateError('Tour not found.');
+    }
+    if (!tour.members.contains(fromUserId) || !tour.members.contains(toUserId)) {
+      throw ArgumentError('Settlement members must belong to the tour.');
+    }
+
+    final settlementRef = _tours.doc(tourId).collection('settlements').doc();
+    await settlementRef.set({
+      'tourId': tourId,
+      'fromUserId': fromUserId,
+      'toUserId': toUserId,
+      'amount': amount,
+      'date': Timestamp.fromDate(date),
+      'note': note?.trim() ?? '',
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<TourSettlement> computeSettlement(String tourId) async {
     final tour = await getTourById(tourId);
     if (tour == null) {
@@ -421,6 +523,22 @@ class TourRepository {
       splitType: splitType,
       sharers: ((data['sharers'] as List?) ?? const []).cast<String>(),
       perHeadAmount: _doubleFromAny(data['perHeadAmount']),
+      date: _dateFromAny(data['date']) ?? DateTime.now(),
+      note: (data['note'] as String?) ?? '',
+    );
+  }
+
+  SettlementPayment _settlementPaymentFromDoc(
+    String tourId,
+    QueryDocumentSnapshot<Map<String, dynamic>> doc,
+  ) {
+    final data = doc.data();
+    return SettlementPayment(
+      id: doc.id,
+      tourId: tourId,
+      fromUserId: (data['fromUserId'] as String?) ?? '',
+      toUserId: (data['toUserId'] as String?) ?? '',
+      amount: _doubleFromAny(data['amount']),
       date: _dateFromAny(data['date']) ?? DateTime.now(),
       note: (data['note'] as String?) ?? '',
     );

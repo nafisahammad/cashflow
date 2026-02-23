@@ -37,6 +37,30 @@ class FinanceRepository {
     );
   }
 
+  Future<void> updateTransaction({
+    required String transactionId,
+    required double amount,
+    required TransactionType type,
+    required String categoryId,
+    required String accountId,
+    required DateTime date,
+    String? note,
+  }) {
+    return _database.updateTransaction(
+      transactionId: transactionId,
+      amount: amount,
+      type: type,
+      categoryId: categoryId,
+      accountId: accountId,
+      date: date,
+      note: note,
+    );
+  }
+
+  Future<void> deleteTransaction(String transactionId) {
+    return _database.deleteTransaction(transactionId);
+  }
+
   Future<List<FinanceTransaction>> getRecentTransactions({int limit = 5}) {
     return _database.getRecentTransactions(limit: limit);
   }

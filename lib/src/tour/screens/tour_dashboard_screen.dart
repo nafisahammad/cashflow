@@ -5,12 +5,14 @@ import 'package:intl/intl.dart';
 
 import '../../providers.dart';
 import '../models/settlement.dart';
+import '../models/settlement_payment.dart';
 import '../models/tour.dart';
 import '../models/tour_member.dart';
 import '../models/tour_transaction.dart';
 import '../providers/tour_providers.dart';
 import 'add_tour_transaction_screen.dart';
 import 'member_detail_screen.dart';
+import 'tour_transaction_detail_screen.dart';
 
 enum _TourDeck { overview, settlement, individualExpense }
 
@@ -35,6 +37,9 @@ class _TourDashboardScreenState extends ConsumerState<TourDashboardScreen> {
     final membersState = ref.watch(tourMembersProvider(widget.tourId));
     final transactionsState = ref.watch(
       tourTransactionsProvider(widget.tourId),
+    );
+    final paymentsState = ref.watch(
+      tourSettlementPaymentsProvider(widget.tourId),
     );
     final totalState = ref.watch(tourTotalExpensesProvider(widget.tourId));
     final settlementState = ref.watch(settlementProvider(widget.tourId));
@@ -65,13 +70,20 @@ class _TourDashboardScreenState extends ConsumerState<TourDashboardScreen> {
         body: Center(child: Text(transactionsState.error.toString())),
       );
     }
+    if (paymentsState.hasError) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Tour Dashboard')),
+        body: Center(child: Text(paymentsState.error.toString())),
+      );
+    }
 
     final tour = tourState.valueOrNull;
     final members = membersState.valueOrNull;
     final transactions = transactionsState.valueOrNull;
+    final payments = paymentsState.valueOrNull;
     final total = totalState.valueOrNull ?? 0;
 
-    if (tour == null || members == null || transactions == null) {
+    if (tour == null || members == null || transactions == null || payments == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Tour Dashboard')),
         body: const Center(child: CircularProgressIndicator()),
@@ -97,10 +109,13 @@ class _TourDashboardScreenState extends ConsumerState<TourDashboardScreen> {
               tourId: widget.tourId,
               members: members,
               transactions: transactions,
+              payments: payments,
+              currentUserId: currentUserId,
               formatter: formatter,
             ),
           if (_selectedDeck == _TourDeck.settlement)
             _SettlementDeck(
+              tourId: widget.tourId,
               members: members,
               settlementState: settlementState,
               currentUserId: currentUserId,
@@ -221,16 +236,26 @@ class _OverviewDeck extends StatelessWidget {
     required this.tourId,
     required this.members,
     required this.transactions,
+    required this.payments,
+    required this.currentUserId,
     required this.formatter,
   });
 
   final String tourId;
   final List<TourMember> members;
   final List<TourTransaction> transactions;
+  final List<SettlementPayment> payments;
+  final String? currentUserId;
   final NumberFormat formatter;
 
   @override
   Widget build(BuildContext context) {
+    final namesById = {for (final member in members) member.userId: member.name};
+    final history = <_TourHistoryItem>[
+      ...transactions.map(_TourHistoryItem.fromTransaction),
+      ...payments.map(_TourHistoryItem.fromSettlementPayment),
+    ]..sort((a, b) => b.date.compareTo(a.date));
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -269,28 +294,73 @@ class _OverviewDeck extends StatelessWidget {
           ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 8),
-        if (transactions.isEmpty)
+        if (history.isEmpty)
           const Card(
             child: Padding(
               padding: EdgeInsets.all(16),
-              child: Text('No shared transactions yet.'),
+              child: Text('No transaction history yet.'),
             ),
           ),
-        ...transactions.map((tx) {
-          String? contributor;
-          for (final member in members) {
-            if (member.userId == tx.contributorId) {
-              contributor = member.name;
-              break;
-            }
+        ...history.map((item) {
+          if (item.transaction != null) {
+            final tx = item.transaction!;
+            final contributor = namesById[tx.contributorId] ?? 'Unknown';
+            return Card(
+              child: ListTile(
+                onTap: () {
+                  final sharerNames = tx.sharers
+                      .map((id) => namesById[id] ?? id)
+                      .toList(growable: false);
+
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TourTransactionDetailScreen(
+                        transaction: tx,
+                        contributorName: contributor,
+                        sharerNames: sharerNames,
+                        formatter: formatter,
+                      ),
+                    ),
+                  );
+                },
+                title: Text(formatter.format(tx.totalAmount)),
+                subtitle: Text(
+                  'By $contributor - ${DateFormat('dd MMM yyyy').format(tx.date)}',
+                ),
+                trailing: Text('${tx.sharers.length} sharers'),
+              ),
+            );
           }
+
+          final payment = item.payment!;
+          final fromName = namesById[payment.fromUserId] ?? payment.fromUserId;
+          final toName = namesById[payment.toUserId] ?? payment.toUserId;
+          final isOutgoing = currentUserId != null && payment.fromUserId == currentUserId;
+          final isIncoming = currentUserId != null && payment.toUserId == currentUserId;
+          final typeLabel = isOutgoing
+              ? 'Lend/Clear Out'
+              : isIncoming
+                  ? 'Lend/Clear In'
+                  : 'Settlement';
+          final amountColor = isOutgoing
+              ? Colors.red
+              : isIncoming
+                  ? Colors.green
+                  : null;
+          final noteSuffix = payment.note.trim().isEmpty ? '' : '\n${payment.note.trim()}';
+
           return Card(
             child: ListTile(
-              title: Text(formatter.format(tx.totalAmount)),
+              leading: const Icon(Icons.handshake_rounded),
+              title: Text(typeLabel),
               subtitle: Text(
-                'By ${contributor ?? 'Unknown'} - ${DateFormat('dd MMM yyyy').format(tx.date)}',
+                '$fromName -> $toName - ${DateFormat('dd MMM yyyy').format(payment.date)}$noteSuffix',
               ),
-              trailing: Text('${tx.sharers.length} sharers'),
+              isThreeLine: noteSuffix.isNotEmpty,
+              trailing: Text(
+                formatter.format(payment.amount),
+                style: TextStyle(fontWeight: FontWeight.w600, color: amountColor),
+              ),
             ),
           );
         }),
@@ -299,24 +369,46 @@ class _OverviewDeck extends StatelessWidget {
   }
 }
 
-class _SettlementDeck extends StatefulWidget {
+class _TourHistoryItem {
+  const _TourHistoryItem._({
+    required this.date,
+    this.transaction,
+    this.payment,
+  });
+
+  factory _TourHistoryItem.fromTransaction(TourTransaction transaction) {
+    return _TourHistoryItem._(date: transaction.date, transaction: transaction);
+  }
+
+  factory _TourHistoryItem.fromSettlementPayment(SettlementPayment payment) {
+    return _TourHistoryItem._(date: payment.date, payment: payment);
+  }
+
+  final DateTime date;
+  final TourTransaction? transaction;
+  final SettlementPayment? payment;
+}
+
+class _SettlementDeck extends ConsumerStatefulWidget {
   const _SettlementDeck({
+    required this.tourId,
     required this.members,
     required this.settlementState,
     required this.currentUserId,
     required this.formatter,
   });
 
+  final String tourId;
   final List<TourMember> members;
   final AsyncValue<TourSettlement> settlementState;
   final String? currentUserId;
   final NumberFormat formatter;
 
   @override
-  State<_SettlementDeck> createState() => _SettlementDeckState();
+  ConsumerState<_SettlementDeck> createState() => _SettlementDeckState();
 }
 
-class _SettlementDeckState extends State<_SettlementDeck> {
+class _SettlementDeckState extends ConsumerState<_SettlementDeck> {
   _SettlementSection _selectedSection = _SettlementSection.receivable;
 
   @override
@@ -385,6 +477,30 @@ class _SettlementDeckState extends State<_SettlementDeck> {
               },
             ),
             const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _showLendDialog(
+                    namesById: namesById,
+                    currentUserId: targetUserId,
+                  ),
+                  icon: const Icon(Icons.currency_exchange_rounded),
+                  label: const Text('Lend Money'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: () => _showClearDialog(
+                    own: own,
+                    namesById: namesById,
+                    currentUserId: targetUserId,
+                  ),
+                  icon: const Icon(Icons.handshake_rounded),
+                  label: const Text('Clear Debt'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
             if (_selectedSection == _SettlementSection.receivable) ...[
               if (own.owedBy.isEmpty)
                 const Card(
@@ -441,6 +557,313 @@ class _SettlementDeckState extends State<_SettlementDeck> {
         ),
       ),
     );
+  }
+
+  Future<void> _showClearDialog({
+    required MemberSettlement own,
+    required Map<String, String> namesById,
+    required String currentUserId,
+  }) async {
+    final counterparties = _selectedSection == _SettlementSection.receivable
+        ? own.owedBy
+        : own.owesTo;
+
+    if (counterparties.isEmpty) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No pending entries to clear.')),
+      );
+      return;
+    }
+
+    final amountController = TextEditingController();
+    final noteController = TextEditingController();
+    String selectedUserId = counterparties.first.userId;
+
+    double currentMax() {
+      for (final item in counterparties) {
+        if (item.userId == selectedUserId) {
+          return item.amount;
+        }
+      }
+      return 0;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) => AlertDialog(
+            title: Text(
+              _selectedSection == _SettlementSection.payable
+                  ? 'Clear debt'
+                  : 'Clear lend',
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: selectedUserId,
+                  decoration: const InputDecoration(
+                    labelText: 'Person',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: counterparties
+                      .map(
+                        (item) => DropdownMenuItem(
+                          value: item.userId,
+                          child: Text(namesById[item.userId] ?? item.userId),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setLocalState(() => selectedUserId = value);
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: InputDecoration(
+                    labelText: 'Amount',
+                    hintText: 'Max ${widget.formatter.format(currentMax())}',
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: noteController,
+                  decoration: const InputDecoration(
+                    labelText: 'Note (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      amountController.dispose();
+      noteController.dispose();
+      return;
+    }
+
+    final amount = double.tryParse(amountController.text.trim());
+    final maxAmount = currentMax();
+    if (amount == null || amount <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid amount.')),
+        );
+      }
+      amountController.dispose();
+      noteController.dispose();
+      return;
+    }
+    if (amount > maxAmount) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Amount exceeds due. Max allowed: ${widget.formatter.format(maxAmount)}',
+            ),
+          ),
+        );
+      }
+      amountController.dispose();
+      noteController.dispose();
+      return;
+    }
+
+    final fromUserId = _selectedSection == _SettlementSection.payable
+        ? currentUserId
+        : selectedUserId;
+    final toUserId = _selectedSection == _SettlementSection.payable
+        ? selectedUserId
+        : currentUserId;
+
+    try {
+      await ref
+          .read(tourRepositoryProvider)
+          .addSettlementPayment(
+            tourId: widget.tourId,
+            fromUserId: fromUserId,
+            toUserId: toUserId,
+            amount: amount,
+            date: DateTime.now(),
+            note: noteController.text,
+          );
+      ref.invalidate(settlementProvider(widget.tourId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Settlement recorded.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      amountController.dispose();
+      noteController.dispose();
+    }
+  }
+
+  Future<void> _showLendDialog({
+    required Map<String, String> namesById,
+    required String currentUserId,
+  }) async {
+    final candidates = widget.members
+        .where((member) => member.userId != currentUserId)
+        .toList(growable: false);
+    if (candidates.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No other members available.')),
+        );
+      }
+      return;
+    }
+
+    final amountController = TextEditingController();
+    final noteController = TextEditingController();
+    String selectedUserId = candidates.first.userId;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setLocalState) => AlertDialog(
+            title: const Text('Lend money'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: selectedUserId,
+                  decoration: const InputDecoration(
+                    labelText: 'Person',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: candidates
+                      .map(
+                        (member) => DropdownMenuItem(
+                          value: member.userId,
+                          child: Text(namesById[member.userId] ?? member.userId),
+                        ),
+                      )
+                      .toList(growable: false),
+                  onChanged: (value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setLocalState(() => selectedUserId = value);
+                  },
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: amountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Amount',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextFormField(
+                  controller: noteController,
+                  decoration: const InputDecoration(
+                    labelText: 'Note (optional)',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Confirm'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (confirmed != true) {
+      amountController.dispose();
+      noteController.dispose();
+      return;
+    }
+
+    final amount = double.tryParse(amountController.text.trim());
+    if (amount == null || amount <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Enter a valid amount.')),
+        );
+      }
+      amountController.dispose();
+      noteController.dispose();
+      return;
+    }
+
+    try {
+      await ref
+          .read(tourRepositoryProvider)
+          .addSettlementPayment(
+            tourId: widget.tourId,
+            fromUserId: currentUserId,
+            toUserId: selectedUserId,
+            amount: amount,
+            date: DateTime.now(),
+            note: noteController.text,
+          );
+      ref.invalidate(settlementProvider(widget.tourId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lend money recorded.')),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.toString())));
+      }
+    } finally {
+      amountController.dispose();
+      noteController.dispose();
+    }
   }
 }
 

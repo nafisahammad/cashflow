@@ -4,12 +4,18 @@ import 'package:intl/intl.dart';
 
 import '../../providers.dart';
 import '../models/tour_member.dart';
+import '../models/tour_transaction.dart';
 import '../providers/tour_providers.dart';
 
 class AddTourTransactionScreen extends ConsumerStatefulWidget {
-  const AddTourTransactionScreen({super.key, required this.tourId});
+  const AddTourTransactionScreen({
+    super.key,
+    required this.tourId,
+    this.initialTransaction,
+  });
 
   final String tourId;
+  final TourTransaction? initialTransaction;
 
   @override
   ConsumerState<AddTourTransactionScreen> createState() =>
@@ -26,6 +32,23 @@ class _AddTourTransactionScreenState
   final Set<String> _selectedSharers = <String>{};
   bool _submitting = false;
 
+  bool get _isEditMode => widget.initialTransaction != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final tx = widget.initialTransaction;
+    if (tx == null) {
+      return;
+    }
+
+    _amountController.text = tx.totalAmount.toStringAsFixed(2);
+    _noteController.text = tx.note;
+    _date = tx.date;
+    _selectedContributorId = tx.contributorId;
+    _selectedSharers.addAll(tx.sharers);
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -39,7 +62,9 @@ class _AddTourTransactionScreenState
     final userState = ref.watch(authStateProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Shared Transaction')),
+      appBar: AppBar(
+        title: Text(_isEditMode ? 'Edit Shared Transaction' : 'Add Shared Transaction'),
+      ),
       body: membersState.when(
         data: (members) {
           if (members.isEmpty) {
@@ -156,7 +181,9 @@ class _AddTourTransactionScreenState
                       onPressed: _submitting ? null : () => _submit(members),
                       icon: const Icon(Icons.save_rounded),
                       label: Text(
-                        _submitting ? 'Saving...' : 'Save Transaction',
+                        _submitting
+                            ? (_isEditMode ? 'Updating...' : 'Saving...')
+                            : (_isEditMode ? 'Update Transaction' : 'Save Transaction'),
                       ),
                     ),
                   ],
@@ -205,14 +232,26 @@ class _AddTourTransactionScreenState
     setState(() => _submitting = true);
     try {
       final repo = ref.read(tourRepositoryProvider);
-      await repo.addTransaction(
-        tourId: widget.tourId,
-        contributorId: _selectedContributorId!,
-        amount: double.parse(_amountController.text.trim()),
-        sharers: _selectedSharers.toList(growable: false),
-        date: _date,
-        note: _noteController.text.trim(),
-      );
+      if (_isEditMode) {
+        await repo.updateTransaction(
+          tourId: widget.tourId,
+          transactionId: widget.initialTransaction!.id,
+          contributorId: _selectedContributorId!,
+          amount: double.parse(_amountController.text.trim()),
+          sharers: _selectedSharers.toList(growable: false),
+          date: _date,
+          note: _noteController.text.trim(),
+        );
+      } else {
+        await repo.addTransaction(
+          tourId: widget.tourId,
+          contributorId: _selectedContributorId!,
+          amount: double.parse(_amountController.text.trim()),
+          sharers: _selectedSharers.toList(growable: false),
+          date: _date,
+          note: _noteController.text.trim(),
+        );
+      }
 
       final user = await ref.read(authStateProvider.future);
       if (user != null) {
@@ -226,7 +265,7 @@ class _AddTourTransactionScreenState
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) {
         return;

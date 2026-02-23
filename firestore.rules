@@ -46,6 +46,21 @@ service cloud.firestore {
         allow create: if isTourMember(tourId) &&
             request.resource.data.tourId == tourId &&
             request.resource.data.contributorId in get(/databases/$(database)/documents/tours/$(tourId)).data.members;
+        allow update: if isTourMember(tourId) &&
+            request.resource.data.tourId == tourId &&
+            request.resource.data.contributorId in get(/databases/$(database)/documents/tours/$(tourId)).data.members;
+        allow delete: if isTourMember(tourId);
+      }
+
+      match /settlements/{settlementId} {
+        allow read: if isTourMember(tourId);
+        allow create: if isTourMember(tourId) &&
+            request.resource.data.tourId == tourId &&
+            request.resource.data.fromUserId in get(/databases/$(database)/documents/tours/$(tourId)).data.members &&
+            request.resource.data.toUserId in get(/databases/$(database)/documents/tours/$(tourId)).data.members &&
+            request.resource.data.fromUserId != request.resource.data.toUserId &&
+            request.resource.data.amount is number &&
+            request.resource.data.amount > 0;
         allow update, delete: if false;
       }
     }

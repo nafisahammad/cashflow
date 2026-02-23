@@ -180,6 +180,29 @@ class AppDatabase {
     });
   }
 
+  Future<void> updateTransaction({
+    required String transactionId,
+    required double amount,
+    required TransactionType type,
+    required String categoryId,
+    required String accountId,
+    required DateTime date,
+    String? note,
+  }) async {
+    await _transactions.doc(transactionId).update({
+      'amount': amount,
+      'type': type.value,
+      'categoryId': categoryId,
+      'accountId': accountId,
+      'note': note?.trim().isEmpty == true ? null : note?.trim(),
+      'date': Timestamp.fromDate(date),
+    });
+  }
+
+  Future<void> deleteTransaction(String transactionId) async {
+    await _transactions.doc(transactionId).delete();
+  }
+
   Future<List<FinanceTransaction>> getRecentTransactions({int limit = 5}) async {
     final transactionsSnapshot = await _transactions.orderBy('date', descending: true).limit(limit).get();
     if (transactionsSnapshot.docs.isEmpty) {

@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/models/finance_transaction.dart';
 import '../../data/models/transaction_type.dart';
 import '../../providers.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
-  const AddTransactionScreen({super.key});
+  const AddTransactionScreen({super.key, this.initialTransaction});
+
+  final FinanceTransaction? initialTransaction;
 
   @override
   ConsumerState<AddTransactionScreen> createState() => _AddTransactionScreenState();
@@ -23,6 +26,26 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   String? _selectedCategoryId;
   bool _isSaving = false;
 
+  bool get _isEditMode => widget.initialTransaction != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final tx = widget.initialTransaction;
+    if (tx == null) {
+      return;
+    }
+
+    _amountController.text = tx.amount.toStringAsFixed(2);
+    _noteController.text = tx.note ?? '';
+    _type = tx.type == TransactionType.income.value
+        ? TransactionType.income
+        : TransactionType.expense;
+    _date = tx.date;
+    _selectedAccountId = tx.accountId;
+    _selectedCategoryId = tx.categoryId;
+  }
+
   @override
   void dispose() {
     _amountController.dispose();
@@ -37,7 +60,9 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     final dateLabel = DateFormat('dd MMM yyyy').format(_date);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Transaction')),
+      appBar: AppBar(
+        title: Text(_isEditMode ? 'Edit Transaction' : 'Add Transaction'),
+      ),
       body: accountState.when(
         data: (accounts) => categoryState.when(
           data: (categories) {
@@ -158,7 +183,13 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                                 accountId: accountId,
                                 categoryId: categoryId,
                               ),
-                      child: Text(_isSaving ? 'Saving...' : 'Save Transaction'),
+                      child: Text(
+                        _isSaving
+                            ? (_isEditMode ? 'Updating...' : 'Saving...')
+                            : (_isEditMode
+                                  ? 'Update Transaction'
+                                  : 'Save Transaction'),
+                      ),
                     ),
                   ],
                 ),
@@ -200,22 +231,54 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         return;
       }
 
-      await ref.read(financeRepositoryProvider(user.uid)).addTransaction(
-            amount: double.parse(_amountController.text.trim()),
-            type: _type,
-            categoryId: categoryId,
-            accountId: accountId,
-            date: _date,
-            note: _noteController.text,
-          );
+      final repository = ref.read(financeRepositoryProvider(user.uid));
+      final amount = double.parse(_amountController.text.trim());
+      if (_isEditMode) {
+        await repository.updateTransaction(
+          transactionId: widget.initialTransaction!.id,
+          amount: amount,
+          type: _type,
+          categoryId: categoryId,
+          accountId: accountId,
+          date: _date,
+          note: _noteController.text,
+        );
+      } else {
+        await repository.addTransaction(
+          amount: amount,
+          type: _type,
+          categoryId: categoryId,
+          accountId: accountId,
+          date: _date,
+          note: _noteController.text,
+        );
+      }
 
       ref.invalidate(accountsProvider);
       ref.invalidate(categoriesByTypeProvider(_type));
+      final originalType = widget.initialTransaction?.type;
+      if (originalType == TransactionType.income.value) {
+        ref.invalidate(categoriesByTypeProvider(TransactionType.income));
+      } else if (originalType == TransactionType.expense.value) {
+        ref.invalidate(categoriesByTypeProvider(TransactionType.expense));
+      }
+      ref.invalidate(recentTransactionsProvider);
+      ref.invalidate(allTransactionsProvider);
+      ref.invalidate(transactionsByRangeProvider);
+      final updatedMonth = DateTime(_date.year, _date.month);
+      ref.invalidate(monthlySummaryProvider(updatedMonth));
+      ref.invalidate(monthlyCategoryBreakdownProvider(updatedMonth));
+      final previousDate = widget.initialTransaction?.date;
+      if (previousDate != null) {
+        final previousMonth = DateTime(previousDate.year, previousDate.month);
+        ref.invalidate(monthlySummaryProvider(previousMonth));
+        ref.invalidate(monthlyCategoryBreakdownProvider(previousMonth));
+      }
 
       if (!mounted) {
         return;
       }
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } finally {
       if (mounted) {
         setState(() => _isSaving = false);
