@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../ai/ai_transaction_assistant_service.dart';
+import '../ai/ai_transaction_assistant_sheet.dart';
 import '../data/models/account.dart';
 import '../data/models/finance_transaction.dart';
 import '../data/models/monthly_summary.dart';
@@ -38,6 +40,14 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ref.invalidate(monthlyCategoryBreakdownProvider(month));
   }
 
+  Future<void> _openAiAssistant() async {
+    await AiTransactionAssistantSheet.show(
+      context,
+      entryPoint: AiAssistantEntryPoint.mainDashboard,
+    );
+    _refreshDashboardData();
+  }
+
   @override
   Widget build(BuildContext context) {
     final pages = [
@@ -53,13 +63,36 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     return Scaffold(
       body: SafeArea(bottom: false, child: pages[_selectedIndex]),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _openAddTransaction,
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add_rounded, size: 30),
-      ),
+      floatingActionButton: _selectedIndex == 0
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'main-ai-mic-fab',
+                  onPressed: _openAiAssistant,
+                  backgroundColor: Theme.of(context).colorScheme.secondary,
+                  foregroundColor: Theme.of(context).colorScheme.onSecondary,
+                  child: const Icon(Icons.mic_rounded),
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton(
+                  heroTag: 'main-add-transaction-fab',
+                  onPressed: _openAddTransaction,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  shape: const CircleBorder(),
+                  child: const Icon(Icons.add_rounded, size: 30),
+                ),
+              ],
+            )
+          : FloatingActionButton(
+              heroTag: 'global-add-transaction-fab',
+              onPressed: _openAddTransaction,
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Theme.of(context).colorScheme.onPrimary,
+              shape: const CircleBorder(),
+              child: const Icon(Icons.add_rounded, size: 30),
+            ),
       bottomNavigationBar: BottomAppBar(
         color: Theme.of(context).cardColor,
         shape: const CircularNotchedRectangle(),

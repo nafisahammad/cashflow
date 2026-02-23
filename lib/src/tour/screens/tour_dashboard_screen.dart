@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../ai/ai_transaction_assistant_service.dart';
+import '../../ai/ai_transaction_assistant_sheet.dart';
 import '../../providers.dart';
 import '../models/settlement.dart';
 import '../models/settlement_payment.dart';
@@ -83,7 +85,10 @@ class _TourDashboardScreenState extends ConsumerState<TourDashboardScreen> {
     final payments = paymentsState.valueOrNull;
     final total = totalState.valueOrNull ?? 0;
 
-    if (tour == null || members == null || transactions == null || payments == null) {
+    if (tour == null ||
+        members == null ||
+        transactions == null ||
+        payments == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Tour Dashboard')),
         body: const Center(child: CircularProgressIndicator()),
@@ -131,14 +136,33 @@ class _TourDashboardScreenState extends ConsumerState<TourDashboardScreen> {
           const SizedBox(height: 80),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => AddTourTransactionScreen(tourId: widget.tourId),
+      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
+      floatingActionButtonAnimator: FloatingActionButtonAnimator.scaling,
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'tour-ai-mic-fab-${widget.tourId}',
+            onPressed: () => AiTransactionAssistantSheet.show(
+              context,
+              entryPoint: AiAssistantEntryPoint.tourDashboard,
+              currentTourId: widget.tourId,
+            ),
+            child: const Icon(Icons.mic_rounded),
           ),
-        ),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Transaction'),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'tour-add-transaction-fab-${widget.tourId}',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => AddTourTransactionScreen(tourId: widget.tourId),
+              ),
+            ),
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Add Transaction'),
+          ),
+        ],
       ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedDeck.index,
@@ -250,7 +274,9 @@ class _OverviewDeck extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final namesById = {for (final member in members) member.userId: member.name};
+    final namesById = {
+      for (final member in members) member.userId: member.name,
+    };
     final history = <_TourHistoryItem>[
       ...transactions.map(_TourHistoryItem.fromTransaction),
       ...payments.map(_TourHistoryItem.fromSettlementPayment),
@@ -335,19 +361,23 @@ class _OverviewDeck extends StatelessWidget {
           final payment = item.payment!;
           final fromName = namesById[payment.fromUserId] ?? payment.fromUserId;
           final toName = namesById[payment.toUserId] ?? payment.toUserId;
-          final isOutgoing = currentUserId != null && payment.fromUserId == currentUserId;
-          final isIncoming = currentUserId != null && payment.toUserId == currentUserId;
+          final isOutgoing =
+              currentUserId != null && payment.fromUserId == currentUserId;
+          final isIncoming =
+              currentUserId != null && payment.toUserId == currentUserId;
           final typeLabel = isOutgoing
               ? 'Lend/Clear Out'
               : isIncoming
-                  ? 'Lend/Clear In'
-                  : 'Settlement';
+              ? 'Lend/Clear In'
+              : 'Settlement';
           final amountColor = isOutgoing
               ? Colors.red
               : isIncoming
-                  ? Colors.green
-                  : null;
-          final noteSuffix = payment.note.trim().isEmpty ? '' : '\n${payment.note.trim()}';
+              ? Colors.green
+              : null;
+          final noteSuffix = payment.note.trim().isEmpty
+              ? ''
+              : '\n${payment.note.trim()}';
 
           return Card(
             child: ListTile(
@@ -359,7 +389,10 @@ class _OverviewDeck extends StatelessWidget {
               isThreeLine: noteSuffix.isNotEmpty,
               trailing: Text(
                 formatter.format(payment.amount),
-                style: TextStyle(fontWeight: FontWeight.w600, color: amountColor),
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: amountColor,
+                ),
               ),
             ),
           );
@@ -673,9 +706,9 @@ class _SettlementDeckState extends ConsumerState<_SettlementDeck> {
     final maxAmount = currentMax();
     if (amount == null || amount <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid amount.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
       }
       amountController.dispose();
       noteController.dispose();
@@ -716,9 +749,9 @@ class _SettlementDeckState extends ConsumerState<_SettlementDeck> {
           );
       ref.invalidate(settlementProvider(widget.tourId));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Settlement recorded.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Settlement recorded.')));
       }
     } catch (error) {
       if (mounted) {
@@ -771,7 +804,9 @@ class _SettlementDeckState extends ConsumerState<_SettlementDeck> {
                       .map(
                         (member) => DropdownMenuItem(
                           value: member.userId,
-                          child: Text(namesById[member.userId] ?? member.userId),
+                          child: Text(
+                            namesById[member.userId] ?? member.userId,
+                          ),
                         ),
                       )
                       .toList(growable: false),
@@ -828,9 +863,9 @@ class _SettlementDeckState extends ConsumerState<_SettlementDeck> {
     final amount = double.tryParse(amountController.text.trim());
     if (amount == null || amount <= 0) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Enter a valid amount.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Enter a valid amount.')));
       }
       amountController.dispose();
       noteController.dispose();
@@ -850,9 +885,9 @@ class _SettlementDeckState extends ConsumerState<_SettlementDeck> {
           );
       ref.invalidate(settlementProvider(widget.tourId));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Lend money recorded.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Lend money recorded.')));
       }
     } catch (error) {
       if (mounted) {
