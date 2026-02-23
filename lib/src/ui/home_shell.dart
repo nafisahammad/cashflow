@@ -8,6 +8,7 @@ import '../data/models/finance_transaction.dart';
 import '../data/models/monthly_summary.dart';
 import '../data/models/transaction_type.dart';
 import '../providers.dart';
+import '../tour/screens/tour_list_screen.dart';
 import 'screens/add_transaction_screen.dart';
 import 'screens/transaction_search_screen.dart';
 
@@ -23,9 +24,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Future<void> _openAddTransaction() async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => const AddTransactionScreen(),
-      ),
+      MaterialPageRoute<void>(builder: (_) => const AddTransactionScreen()),
     );
     _refreshDashboardData();
   }
@@ -51,10 +50,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     ];
 
     return Scaffold(
-      body: SafeArea(
-        bottom: false,
-        child: pages[_selectedIndex],
-      ),
+      body: SafeArea(bottom: false, child: pages[_selectedIndex]),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: FloatingActionButton(
         onPressed: _openAddTransaction,
@@ -132,7 +128,9 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
     final settings = ref.watch(appSettingsProvider).valueOrNull;
     final formatter = _currencyFormatter(settings?.currencyCode ?? 'BDT');
 
-    if (accountState.isLoading || summaryState.isLoading || recentState.isLoading) {
+    if (accountState.isLoading ||
+        summaryState.isLoading ||
+        recentState.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
@@ -147,9 +145,13 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
     }
 
     final accounts = accountState.value ?? const <Account>[];
-    final summary = summaryState.value ?? const MonthlySummary(income: 0, expense: 0);
+    final summary =
+        summaryState.value ?? const MonthlySummary(income: 0, expense: 0);
     final recent = recentState.value ?? const <FinanceTransaction>[];
-    final total = accounts.fold<double>(0, (sum, account) => sum + account.currentBalance);
+    final total = accounts.fold<double>(
+      0,
+      (sum, account) => sum + account.currentBalance,
+    );
     final saved = summary.savings <= 0 ? 0.0 : summary.savings;
     final target = summary.expense <= 0 ? 1.0 : summary.expense;
     final progress = (saved / target).clamp(0.0, 1.0);
@@ -162,8 +164,10 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
             ),
           ]
         : filteredRecent
-            .map((tx) => _TransactionTile(transaction: tx, formatter: formatter))
-            .toList(growable: false);
+              .map(
+                (tx) => _TransactionTile(transaction: tx, formatter: formatter),
+              )
+              .toList(growable: false);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
@@ -174,7 +178,10 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
           onNotificationPressed: _showNotificationHint,
         ),
         const SizedBox(height: 16),
-        const Text('Balance', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Balance',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 2),
         Text(
           formatter.format(total),
@@ -193,18 +200,30 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Well done!', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                    const Text(
+                      'Well done!',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     const SizedBox(height: 6),
                     const Text(
                       'Your spending changed this month.',
                       style: TextStyle(fontSize: 13),
                     ),
                     const SizedBox(height: 14),
-                    _ViewDetailsButton(onTap: () => _showMonthlyDetails(summary, formatter)),
+                    _ViewDetailsButton(
+                      onTap: () => _showMonthlyDetails(summary, formatter),
+                    ),
                   ],
                 ),
               ),
-              _SavedRing(amount: saved, formatter: formatter, progress: progress),
+              _SavedRing(
+                amount: saved,
+                formatter: formatter,
+                progress: progress,
+              ),
             ],
           ),
         ),
@@ -243,7 +262,8 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
               _QuickAction(
                 icon: Icons.history_rounded,
                 label: 'History',
-                onTap: () => setState(() => _selectedFilter = _HistoryFilter.all),
+                onTap: () =>
+                    setState(() => _selectedFilter = _HistoryFilter.all),
               ),
               _QuickAction(
                 icon: Icons.currency_exchange_rounded,
@@ -261,11 +281,22 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
               Row(
                 children: [
                   const Expanded(
-                    child: Text('Transaction History', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Transaction History',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
                   GestureDetector(
                     onTap: () => widget.onNavigateTab(2),
-                    child: Text('See All', style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                    child: Text(
+                      'See All',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -276,21 +307,25 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
                     label: 'All',
                     selected: _selectedFilter == _HistoryFilter.all,
                     fontSize: 14,
-                    onTap: () => setState(() => _selectedFilter = _HistoryFilter.all),
+                    onTap: () =>
+                        setState(() => _selectedFilter = _HistoryFilter.all),
                   ),
                   const SizedBox(width: 18),
                   _HistoryTab(
                     label: 'Spending',
                     selected: _selectedFilter == _HistoryFilter.spending,
                     fontSize: 14,
-                    onTap: () => setState(() => _selectedFilter = _HistoryFilter.spending),
+                    onTap: () => setState(
+                      () => _selectedFilter = _HistoryFilter.spending,
+                    ),
                   ),
                   const SizedBox(width: 18),
                   _HistoryTab(
                     label: 'Income',
                     selected: _selectedFilter == _HistoryFilter.income,
                     fontSize: 14,
-                    onTap: () => setState(() => _selectedFilter = _HistoryFilter.income),
+                    onTap: () =>
+                        setState(() => _selectedFilter = _HistoryFilter.income),
                   ),
                 ],
               ),
@@ -309,9 +344,13 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
   ) {
     switch (filter) {
       case _HistoryFilter.spending:
-        return items.where((tx) => tx.type == TransactionType.expense.value).toList(growable: false);
+        return items
+            .where((tx) => tx.type == TransactionType.expense.value)
+            .toList(growable: false);
       case _HistoryFilter.income:
-        return items.where((tx) => tx.type == TransactionType.income.value).toList(growable: false);
+        return items
+            .where((tx) => tx.type == TransactionType.income.value)
+            .toList(growable: false);
       case _HistoryFilter.all:
         return items;
     }
@@ -342,7 +381,10 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('This Month Overview', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const Text(
+              'This Month Overview',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
             const SizedBox(height: 12),
             _ReportMetricRow(
               icon: Icons.trending_up_rounded,
@@ -373,7 +415,13 @@ class _DashboardPageState extends ConsumerState<_DashboardPage> {
 class _AccountsPage extends ConsumerWidget {
   const _AccountsPage();
 
-  static const _accountTypes = ['cash', 'bank', 'mobile_wallet', 'savings', 'credit_card'];
+  static const _accountTypes = [
+    'cash',
+    'bank',
+    'mobile_wallet',
+    'savings',
+    'credit_card',
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -398,11 +446,14 @@ class _AccountsPage extends ConsumerWidget {
             ),
             Expanded(
               child: accounts.isEmpty
-                  ? const Center(child: Text('No accounts found. Add your first account.'))
+                  ? const Center(
+                      child: Text('No accounts found. Add your first account.'),
+                    )
                   : ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                       itemCount: accounts.length,
-                      separatorBuilder: (_, index) => const SizedBox(height: 10),
+                      separatorBuilder: (_, index) =>
+                          const SizedBox(height: 10),
                       itemBuilder: (context, index) {
                         final account = accounts[index];
                         return _RoundedCard(
@@ -413,7 +464,9 @@ class _AccountsPage extends ConsumerWidget {
                                 Expanded(child: Text(account.name)),
                                 Text(
                                   formatter.format(account.currentBalance),
-                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
                               ],
                             ),
@@ -422,7 +475,11 @@ class _AccountsPage extends ConsumerWidget {
                               icon: const Icon(Icons.more_vert_rounded),
                               onSelected: (value) {
                                 if (value == 'edit') {
-                                  _showAccountDialog(context, ref, existing: account);
+                                  _showAccountDialog(
+                                    context,
+                                    ref,
+                                    existing: account,
+                                  );
                                 } else if (value == 'delete') {
                                   _confirmDeleteAccount(context, ref, account);
                                 }
@@ -470,7 +527,8 @@ class _AccountsPage extends ConsumerWidget {
   }) async {
     final formResult = await showDialog<_AccountFormResult>(
       context: context,
-      builder: (context) => _AccountFormDialog(existing: existing, accountTypes: _accountTypes),
+      builder: (context) =>
+          _AccountFormDialog(existing: existing, accountTypes: _accountTypes),
     );
 
     if (formResult == null) {
@@ -512,9 +570,14 @@ class _AccountsPage extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete account?'),
-        content: Text('Delete "${account.name}" and its transactions? This cannot be undone.'),
+        content: Text(
+          'Delete "${account.name}" and its transactions? This cannot be undone.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -546,6 +609,7 @@ class _AccountsPage extends ConsumerWidget {
 }
 
 enum _StatsRange { daily, weekly, monthly, yearly }
+
 enum _StatsTxFilter { all, income, expense }
 
 class _ReportsPage extends ConsumerStatefulWidget {
@@ -566,8 +630,12 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
     final previousStart = start.subtract(end.difference(start));
     final previousEnd = start;
 
-    final txState = ref.watch(transactionsByRangeProvider((start: start, end: end)));
-    final prevTxState = ref.watch(transactionsByRangeProvider((start: previousStart, end: previousEnd)));
+    final txState = ref.watch(
+      transactionsByRangeProvider((start: start, end: end)),
+    );
+    final prevTxState = ref.watch(
+      transactionsByRangeProvider((start: previousStart, end: previousEnd)),
+    );
     final accountState = ref.watch(accountsProvider);
     final settings = ref.watch(appSettingsProvider).valueOrNull;
     final selectedCurrency = settings?.currencyCode ?? 'BDT';
@@ -588,15 +656,22 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
     }
 
     final transactions = txState.value ?? const <FinanceTransaction>[];
-    final previousTransactions = prevTxState.value ?? const <FinanceTransaction>[];
+    final previousTransactions =
+        prevTxState.value ?? const <FinanceTransaction>[];
     final accounts = accountState.value ?? const <Account>[];
 
     final current = _computeMetrics(transactions);
     final previous = _computeMetrics(previousTransactions);
     final incomeChange = _changePercent(current.income, previous.income);
     final expenseChange = _changePercent(current.expense, previous.expense);
-    final totalBalance = accounts.fold<double>(0, (sum, account) => sum + account.currentBalance);
-    final filteredTransactions = _filterStatsTransactions(transactions, _txFilter);
+    final totalBalance = accounts.fold<double>(
+      0,
+      (sum, account) => sum + account.currentBalance,
+    );
+    final filteredTransactions = _filterStatsTransactions(
+      transactions,
+      _txFilter,
+    );
 
     final chart = _buildChartSeries(
       transactions: transactions,
@@ -656,7 +731,10 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
               Center(
                 child: Text(
                   periodLabel,
-                  style: TextStyle(fontSize: 15, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -669,8 +747,12 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
                     gridData: const FlGridData(show: false),
                     borderData: FlBorderData(show: false),
                     titlesData: FlTitlesData(
-                      rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                      topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
+                      topTitles: const AxisTitles(
+                        sideTitles: SideTitles(showTitles: false),
+                      ),
                       leftTitles: AxisTitles(
                         sideTitles: SideTitles(
                           showTitles: true,
@@ -679,7 +761,9 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
                           getTitlesWidget: (value, meta) => Text(
                             '$currencyPrefix${value.toInt()}',
                             style: TextStyle(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
                               fontSize: 10,
                             ),
                           ),
@@ -694,7 +778,8 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
                               return const SizedBox.shrink();
                             }
                             final label = chart.labels[index];
-                            final highlight = _range == _StatsRange.weekly && label == 'Sun';
+                            final highlight =
+                                _range == _StatsRange.weekly && label == 'Sun';
                             return Padding(
                               padding: const EdgeInsets.only(top: 6),
                               child: Text(
@@ -702,8 +787,12 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
                                 style: TextStyle(
                                   color: highlight
                                       ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  fontWeight: highlight ? FontWeight.w700 : FontWeight.w400,
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
+                                  fontWeight: highlight
+                                      ? FontWeight.w700
+                                      : FontWeight.w400,
                                   fontSize: 10,
                                 ),
                               ),
@@ -720,7 +809,8 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
                         color: const Color(0xFFA4E86A),
                         dotData: FlDotData(
                           show: true,
-                          checkToShowDot: (spot, barData) => spot.x == chart.income.length - 1,
+                          checkToShowDot: (spot, barData) =>
+                              spot.x == chart.income.length - 1,
                         ),
                       ),
                       LineChartBarData(
@@ -730,7 +820,8 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
                         color: const Color(0xFFFF6B1A),
                         dotData: FlDotData(
                           show: true,
-                          checkToShowDot: (spot, barData) => spot.x == chart.expense.length - 1,
+                          checkToShowDot: (spot, barData) =>
+                              spot.x == chart.expense.length - 1,
                         ),
                       ),
                     ],
@@ -763,7 +854,10 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
           ],
         ),
         const SizedBox(height: 12),
-        const Text('Balance', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text(
+          'Balance',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+        ),
         const SizedBox(height: 4),
         Text(
           formatter.format(totalBalance),
@@ -776,7 +870,10 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
         ),
         const SizedBox(height: 12),
         const SizedBox(height: 8),
-        const Text('Recent Transactions', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        const Text(
+          'Recent Transactions',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -807,15 +904,22 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
           _RoundedCard(
             child: Text(
               'No transactions for this filter.',
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           )
         else
-          ...filteredTransactions.reversed.take(5).map(
+          ...filteredTransactions.reversed
+              .take(5)
+              .map(
                 (tx) => Padding(
                   padding: const EdgeInsets.only(bottom: 10),
                   child: _RoundedCard(
-                    child: _TransactionTile(transaction: tx, formatter: formatter),
+                    child: _TransactionTile(
+                      transaction: tx,
+                      formatter: formatter,
+                    ),
                   ),
                 ),
               ),
@@ -841,8 +945,11 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
         final start = DateTime(date.year, date.month, date.day);
         return (start, start.add(const Duration(days: 1)));
       case _StatsRange.weekly:
-        final start = DateTime(date.year, date.month, date.day)
-            .subtract(Duration(days: date.weekday - DateTime.monday));
+        final start = DateTime(
+          date.year,
+          date.month,
+          date.day,
+        ).subtract(Duration(days: date.weekday - DateTime.monday));
         return (start, start.add(const Duration(days: 7)));
       case _StatsRange.monthly:
         final start = DateTime(date.year, date.month);
@@ -853,7 +960,9 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
     }
   }
 
-  ({double income, double expense}) _computeMetrics(List<FinanceTransaction> transactions) {
+  ({double income, double expense}) _computeMetrics(
+    List<FinanceTransaction> transactions,
+  ) {
     double income = 0;
     double expense = 0;
     for (final tx in transactions) {
@@ -884,15 +993,25 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
   ) {
     switch (filter) {
       case _StatsTxFilter.income:
-        return items.where((tx) => tx.type == TransactionType.income.value).toList(growable: false);
+        return items
+            .where((tx) => tx.type == TransactionType.income.value)
+            .toList(growable: false);
       case _StatsTxFilter.expense:
-        return items.where((tx) => tx.type == TransactionType.expense.value).toList(growable: false);
+        return items
+            .where((tx) => tx.type == TransactionType.expense.value)
+            .toList(growable: false);
       case _StatsTxFilter.all:
         return items;
     }
   }
 
-  ({List<FlSpot> income, List<FlSpot> expense, List<String> labels, double maxY}) _buildChartSeries({
+  ({
+    List<FlSpot> income,
+    List<FlSpot> expense,
+    List<String> labels,
+    double maxY,
+  })
+  _buildChartSeries({
     required List<FinanceTransaction> transactions,
     required DateTime rangeStart,
     required _StatsRange range,
@@ -946,7 +1065,20 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
       case _StatsRange.yearly:
         incomeBuckets = List<double>.filled(12, 0);
         expenseBuckets = List<double>.filled(12, 0);
-        labels = const ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+        labels = const [
+          'J',
+          'F',
+          'M',
+          'A',
+          'M',
+          'J',
+          'J',
+          'A',
+          'S',
+          'O',
+          'N',
+          'D',
+        ];
         for (final tx in transactions) {
           final index = tx.date.month - 1;
           if (tx.type == TransactionType.income.value) {
@@ -958,11 +1090,20 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
         break;
     }
 
-    final maxValue = [...incomeBuckets, ...expenseBuckets].fold<double>(0, (m, v) => v > m ? v : m);
+    final maxValue = [
+      ...incomeBuckets,
+      ...expenseBuckets,
+    ].fold<double>(0, (m, v) => v > m ? v : m);
     final maxY = maxValue <= 0 ? 100.0 : maxValue * 1.25;
     return (
-      income: List.generate(incomeBuckets.length, (i) => FlSpot(i.toDouble(), incomeBuckets[i])),
-      expense: List.generate(expenseBuckets.length, (i) => FlSpot(i.toDouble(), expenseBuckets[i])),
+      income: List.generate(
+        incomeBuckets.length,
+        (i) => FlSpot(i.toDouble(), incomeBuckets[i]),
+      ),
+      expense: List.generate(
+        expenseBuckets.length,
+        (i) => FlSpot(i.toDouble(), expenseBuckets[i]),
+      ),
       labels: labels,
       maxY: maxY,
     );
@@ -977,7 +1118,12 @@ class _ReportsPageState extends ConsumerState<_ReportsPage> {
     return 2000;
   }
 
-  String _periodLabel(DateTime now, _StatsRange range, DateTime start, DateTime end) {
+  String _periodLabel(
+    DateTime now,
+    _StatsRange range,
+    DateTime start,
+    DateTime end,
+  ) {
     switch (range) {
       case _StatsRange.daily:
         return DateFormat('dd MMM yyyy').format(now);
@@ -1007,18 +1153,40 @@ class _SettingsPage extends ConsumerWidget {
         data: (user) => ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Text(
+              'Profile',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            _RoundedCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [Text(user?.email ?? 'No signed-in email')],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Preferences',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
             _RoundedCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(user?.email ?? 'No signed-in email'),
                   const SizedBox(height: 8),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     secondary: const Icon(Icons.dark_mode_rounded),
                     title: const Text('Dark mode'),
                     value: settings.themeMode == ThemeMode.dark,
-                    onChanged: (enabled) => ref.read(appSettingsProvider.notifier).setDarkMode(enabled),
+                    onChanged: (enabled) => ref
+                        .read(appSettingsProvider.notifier)
+                        .setDarkMode(enabled),
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
@@ -1029,11 +1197,16 @@ class _SettingsPage extends ConsumerWidget {
                       border: OutlineInputBorder(),
                     ),
                     items: _currencies
-                        .map((code) => DropdownMenuItem(value: code, child: Text(code)))
+                        .map(
+                          (code) =>
+                              DropdownMenuItem(value: code, child: Text(code)),
+                        )
                         .toList(),
                     onChanged: (value) {
                       if (value != null) {
-                        ref.read(appSettingsProvider.notifier).setCurrency(value);
+                        ref
+                            .read(appSettingsProvider.notifier)
+                            .setCurrency(value);
                       }
                     },
                   ),
@@ -1041,6 +1214,37 @@ class _SettingsPage extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 12),
+            Text(
+              'Tour Mode',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            _RoundedCard(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const CircleAvatar(child: Icon(Icons.groups_rounded)),
+                title: const Text('Group Tours & Shared Expenses'),
+                subtitle: const Text(
+                  'Create tours, split costs, and track who owes whom.',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const TourListScreen(),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Security',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
             _RoundedCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1059,7 +1263,9 @@ class _SettingsPage extends ConsumerWidget {
                   const SizedBox(height: 8),
                   FilledButton(
                     onPressed: () => _confirmResetData(context, ref),
-                    style: FilledButton.styleFrom(backgroundColor: Colors.red.shade600),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: Colors.red.shade600,
+                    ),
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -1087,9 +1293,14 @@ class _SettingsPage extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Reset all data?'),
-        content: const Text('This will remove all transactions, accounts, and categories, then re-seed defaults.'),
+        content: const Text(
+          'This will remove all transactions, accounts, and categories, then re-seed defaults.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
@@ -1134,12 +1345,20 @@ class _TransactionTile extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(
-        backgroundColor: isIncome ? const Color(0xFF2B3F2D) : const Color(0xFF3F2B2B),
-        foregroundColor: isIncome ? const Color(0xFFA4E86A) : const Color(0xFFFF8B8B),
-        child: Icon(isIncome ? Icons.south_west_rounded : Icons.north_east_rounded),
+        backgroundColor: isIncome
+            ? const Color(0xFF2B3F2D)
+            : const Color(0xFF3F2B2B),
+        foregroundColor: isIncome
+            ? const Color(0xFFA4E86A)
+            : const Color(0xFFFF8B8B),
+        child: Icon(
+          isIncome ? Icons.south_west_rounded : Icons.north_east_rounded,
+        ),
       ),
       title: Text(transaction.categoryName),
-      subtitle: Text('${transaction.accountName} - ${DateFormat('dd MMM').format(transaction.date)}'),
+      subtitle: Text(
+        '${transaction.accountName} - ${DateFormat('dd MMM').format(transaction.date)}',
+      ),
       trailing: Text(
         formatter.format(transaction.amount),
         style: TextStyle(
@@ -1168,8 +1387,14 @@ class _DashboardHeader extends StatelessWidget {
       children: [
         CircleAvatar(
           radius: 16,
-          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-          child: Icon(Icons.person_rounded, size: 18, color: Theme.of(context).colorScheme.onSurface),
+          backgroundColor: Theme.of(
+            context,
+          ).colorScheme.surfaceContainerHighest,
+          child: Icon(
+            Icons.person_rounded,
+            size: 18,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
         ),
         const SizedBox(width: 10),
         const Expanded(
@@ -1180,7 +1405,9 @@ class _DashboardHeader extends StatelessWidget {
         ),
         IconButton(
           onPressed: onThemePressed,
-          icon: Icon(isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+          icon: Icon(
+            isDarkMode ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+          ),
         ),
         IconButton(
           onPressed: onNotificationPressed,
@@ -1237,8 +1464,12 @@ class _SavedRing extends StatelessWidget {
             child: CircularProgressIndicator(
               value: progress,
               strokeWidth: 9,
-              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
+              backgroundColor: Theme.of(
+                context,
+              ).colorScheme.surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
             ),
           ),
           Column(
@@ -1246,7 +1477,10 @@ class _SavedRing extends StatelessWidget {
             children: [
               Text(
                 formatter.format(amount),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               Text(
                 'Saved',
@@ -1296,7 +1530,10 @@ class _AccountBalanceCard extends StatelessWidget {
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(Icons.account_balance_rounded, color: Theme.of(context).colorScheme.onSurface),
+              child: Icon(
+                Icons.account_balance_rounded,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
             const Spacer(),
             Text(
@@ -1308,7 +1545,10 @@ class _AccountBalanceCard extends StatelessWidget {
               account.name.toUpperCase(),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 12),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
             ),
           ],
         ),
@@ -1338,11 +1578,18 @@ class _QuickAction extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 22, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              icon,
+              size: 22,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(height: 4),
             Text(
               label,
-              style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 10,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -1366,14 +1613,23 @@ class _HistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant;
+    final color = selected
+        ? Theme.of(context).colorScheme.primary
+        : Theme.of(context).colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label, style: TextStyle(color: color, fontSize: fontSize, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: fontSize,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 4),
           Container(
             width: 42,
@@ -1410,7 +1666,9 @@ class _NavIconButton extends StatelessWidget {
       icon: Icon(
         icon,
         size: 28,
-        color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+        color: selected
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).colorScheme.onSurfaceVariant,
       ),
     );
   }
@@ -1437,12 +1695,18 @@ class _StatsSearchBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Icon(Icons.search_rounded, color: Theme.of(context).colorScheme.onSurfaceVariant),
+            Icon(
+              Icons.search_rounded,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
             const SizedBox(width: 10),
-          Text(
-            _searchPlaceholder,
-            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontSize: 16),
-          ),
+            Text(
+              _searchPlaceholder,
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 16,
+              ),
+            ),
           ],
         ),
       ),
@@ -1474,14 +1738,18 @@ class _StatsFilterTab extends StatelessWidget {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: selected ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurfaceVariant,
+                color: selected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
             const SizedBox(height: 8),
             Container(
               width: 50,
               height: 2.5,
-              color: selected ? Theme.of(context).colorScheme.primary : Colors.transparent,
+              color: selected
+                  ? Theme.of(context).colorScheme.primary
+                  : Colors.transparent,
             ),
           ],
         ),
@@ -1520,8 +1788,20 @@ class _TrendCard extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-              Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ],
@@ -1540,10 +1820,7 @@ class _RoundedCard extends StatelessWidget {
     return Card(
       color: Theme.of(context).cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: child,
-      ),
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
     );
   }
 }
@@ -1620,8 +1897,9 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.existing?.name ?? '');
-    _openingBalanceController =
-        TextEditingController(text: (widget.existing?.openingBalance ?? 0).toStringAsFixed(2));
+    _openingBalanceController = TextEditingController(
+      text: (widget.existing?.openingBalance ?? 0).toStringAsFixed(2),
+    );
     _selectedType = widget.existing?.type ?? widget.accountTypes.first;
   }
 
@@ -1656,7 +1934,9 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
               initialValue: _selectedType,
               decoration: const InputDecoration(labelText: 'Type'),
               items: widget.accountTypes
-                  .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                  .map(
+                    (type) => DropdownMenuItem(value: type, child: Text(type)),
+                  )
                   .toList(),
               onChanged: (value) {
                 if (value != null) {
@@ -1667,7 +1947,9 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
             const SizedBox(height: 10),
             TextFormField(
               controller: _openingBalanceController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(labelText: 'Opening balance'),
               validator: (value) {
                 final amount = double.tryParse((value ?? '').trim());
@@ -1681,7 +1963,10 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
           onPressed: _submit,
           child: Text(widget.existing == null ? 'Add' : 'Save'),
@@ -1707,7 +1992,11 @@ class _AccountFormDialogState extends State<_AccountFormDialog> {
 
 NumberFormat _currencyFormatter(String currencyCode) {
   final symbol = _currencyAxisPrefix(currencyCode);
-  return NumberFormat.currency(locale: 'en_US', symbol: symbol, decimalDigits: 2);
+  return NumberFormat.currency(
+    locale: 'en_US',
+    symbol: symbol,
+    decimalDigits: 2,
+  );
 }
 
 String _currencyAxisPrefix(String currencyCode) {

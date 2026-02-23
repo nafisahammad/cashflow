@@ -27,15 +27,16 @@ final databaseProvider = Provider.family<AppDatabase, String>((ref, userId) {
   return AppDatabase(FirebaseFirestore.instance, userId);
 });
 
-final financeRepositoryProvider = Provider.family<FinanceRepository, String>((ref, userId) {
+final financeRepositoryProvider = Provider.family<FinanceRepository, String>((
+  ref,
+  userId,
+) {
   return FinanceRepository(ref.watch(databaseProvider(userId)));
 });
 
 final appStartupProvider = FutureProvider<void>((ref) async {
   final options = await DefaultFirebaseOptions.currentPlatform;
-  await Firebase.initializeApp(
-    options: options,
-  );
+  await Firebase.initializeApp(options: options);
 });
 
 final accountsProvider = FutureProvider<List<Account>>((ref) async {
@@ -51,19 +52,24 @@ final accountsProvider = FutureProvider<List<Account>>((ref) async {
 });
 
 final categoriesByTypeProvider =
-    FutureProvider.family<List<FinanceCategory>, TransactionType>((ref, type) async {
-  await ref.watch(appStartupProvider.future);
-  final user = await ref.watch(authStateProvider.future);
-  if (user == null) {
-    return const [];
-  }
+    FutureProvider.family<List<FinanceCategory>, TransactionType>((
+      ref,
+      type,
+    ) async {
+      await ref.watch(appStartupProvider.future);
+      final user = await ref.watch(authStateProvider.future);
+      if (user == null) {
+        return const [];
+      }
 
-  final repository = ref.read(financeRepositoryProvider(user.uid));
-  await repository.init();
-  return repository.getCategoriesByType(type);
-});
+      final repository = ref.read(financeRepositoryProvider(user.uid));
+      await repository.init();
+      return repository.getCategoriesByType(type);
+    });
 
-final recentTransactionsProvider = FutureProvider<List<FinanceTransaction>>((ref) async {
+final recentTransactionsProvider = FutureProvider<List<FinanceTransaction>>((
+  ref,
+) async {
   await ref.watch(appStartupProvider.future);
   final user = await ref.watch(authStateProvider.future);
   if (user == null) {
@@ -75,7 +81,9 @@ final recentTransactionsProvider = FutureProvider<List<FinanceTransaction>>((ref
   return repository.getRecentTransactions(limit: 5);
 });
 
-final allTransactionsProvider = FutureProvider<List<FinanceTransaction>>((ref) async {
+final allTransactionsProvider = FutureProvider<List<FinanceTransaction>>((
+  ref,
+) async {
   await ref.watch(appStartupProvider.future);
   final user = await ref.watch(authStateProvider.future);
   if (user == null) {
@@ -93,19 +101,28 @@ final allTransactionsProvider = FutureProvider<List<FinanceTransaction>>((ref) a
 typedef TransactionRange = ({DateTime start, DateTime end});
 
 final transactionsByRangeProvider =
-    FutureProvider.family<List<FinanceTransaction>, TransactionRange>((ref, range) async {
-  await ref.watch(appStartupProvider.future);
-  final user = await ref.watch(authStateProvider.future);
-  if (user == null) {
-    return const [];
-  }
+    FutureProvider.family<List<FinanceTransaction>, TransactionRange>((
+      ref,
+      range,
+    ) async {
+      await ref.watch(appStartupProvider.future);
+      final user = await ref.watch(authStateProvider.future);
+      if (user == null) {
+        return const [];
+      }
 
-  final repository = ref.read(financeRepositoryProvider(user.uid));
-  await repository.init();
-  return repository.getTransactionsInRange(start: range.start, end: range.end);
-});
+      final repository = ref.read(financeRepositoryProvider(user.uid));
+      await repository.init();
+      return repository.getTransactionsInRange(
+        start: range.start,
+        end: range.end,
+      );
+    });
 
-final monthlySummaryProvider = FutureProvider.family<MonthlySummary, DateTime>((ref, month) async {
+final monthlySummaryProvider = FutureProvider.family<MonthlySummary, DateTime>((
+  ref,
+  month,
+) async {
   await ref.watch(appStartupProvider.future);
   final user = await ref.watch(authStateProvider.future);
   if (user == null) {
@@ -119,30 +136,24 @@ final monthlySummaryProvider = FutureProvider.family<MonthlySummary, DateTime>((
 
 final monthlyCategoryBreakdownProvider =
     FutureProvider.family<List<CategoryExpense>, DateTime>((ref, month) async {
-  await ref.watch(appStartupProvider.future);
-  final user = await ref.watch(authStateProvider.future);
-  if (user == null) {
-    return const [];
-  }
+      await ref.watch(appStartupProvider.future);
+      final user = await ref.watch(authStateProvider.future);
+      if (user == null) {
+        return const [];
+      }
 
-  final repository = ref.read(financeRepositoryProvider(user.uid));
-  await repository.init();
-  return repository.getCategoryExpenseBreakdown(month);
-});
+      final repository = ref.read(financeRepositoryProvider(user.uid));
+      await repository.init();
+      return repository.getCategoryExpenseBreakdown(month);
+    });
 
 class AppSettings {
-  const AppSettings({
-    required this.themeMode,
-    required this.currencyCode,
-  });
+  const AppSettings({required this.themeMode, required this.currencyCode});
 
   final ThemeMode themeMode;
   final String currencyCode;
 
-  AppSettings copyWith({
-    ThemeMode? themeMode,
-    String? currencyCode,
-  }) {
+  AppSettings copyWith({ThemeMode? themeMode, String? currencyCode}) {
     return AppSettings(
       themeMode: themeMode ?? this.themeMode,
       currencyCode: currencyCode ?? this.currencyCode,
@@ -168,7 +179,8 @@ class AppSettingsController extends AsyncNotifier<AppSettings> {
   Future<void> setDarkMode(bool enabled) async {
     final prefs = await SharedPreferences.getInstance();
     final nextMode = enabled ? ThemeMode.dark : ThemeMode.light;
-    final current = state.valueOrNull ??
+    final current =
+        state.valueOrNull ??
         AppSettings(
           themeMode: nextMode,
           currencyCode: prefs.getString(_currencyKey) ?? 'BDT',
@@ -179,9 +191,12 @@ class AppSettingsController extends AsyncNotifier<AppSettings> {
 
   Future<void> setCurrency(String currencyCode) async {
     final prefs = await SharedPreferences.getInstance();
-    final current = state.valueOrNull ??
+    final current =
+        state.valueOrNull ??
         AppSettings(
-          themeMode: (prefs.getBool(_themeKey) ?? false) ? ThemeMode.dark : ThemeMode.light,
+          themeMode: (prefs.getBool(_themeKey) ?? false)
+              ? ThemeMode.dark
+              : ThemeMode.light,
           currencyCode: currencyCode,
         );
     state = AsyncData(current.copyWith(currencyCode: currencyCode));
@@ -189,6 +204,7 @@ class AppSettingsController extends AsyncNotifier<AppSettings> {
   }
 }
 
-final appSettingsProvider = AsyncNotifierProvider<AppSettingsController, AppSettings>(
-  AppSettingsController.new,
-);
+final appSettingsProvider =
+    AsyncNotifierProvider<AppSettingsController, AppSettings>(
+      AppSettingsController.new,
+    );
