@@ -7,7 +7,7 @@ admin.initializeApp();
 
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
-const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"];
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
 exports.aiTransactionDecision = onRequest(
@@ -175,38 +175,47 @@ async function callGemini(prompt) {
     throw new Error("Missing GEMINI_API_KEY secret.");
   }
 
-  const endpoint = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-  const payload = {
-    contents: [
-      {
-        role: "user",
-        parts: [{ text: prompt }],
+  let lastError = null;
+  for (const model of GEMINI_MODELS) {
+    const endpoint = `${GEMINI_API_BASE}/${model}:generateContent?key=${encodeURIComponent(key)}`;
+    const payload = {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+      generationConfig: {
+        temperature: 0.2,
+        topP: 0.9,
+        responseMimeType: "application/json",
       },
-    ],
-    generationConfig: {
-      temperature: 0.2,
-      topP: 0.9,
-      responseMimeType: "application/json",
-    },
-  };
+    };
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
 
-  if (!response.ok) {
-    const bodyText = await response.text();
-    throw new Error(`Gemini request failed (${response.status}): ${bodyText}`);
+    if (!response.ok) {
+      const bodyText = await response.text();
+      lastError = new Error(
+        `Gemini request failed for ${model} (${response.status}): ${bodyText}`
+      );
+      continue;
+    }
+
+    const data = await response.json();
+    const text = extractTextFromGeminiResponse(data);
+    if (!text) {
+      lastError = new Error(`Gemini returned empty content for ${model}.`);
+      continue;
+    }
+    return text;
   }
 
-  const data = await response.json();
-  const text = extractTextFromGeminiResponse(data);
-  if (!text) {
-    throw new Error("Gemini returned empty content.");
-  }
-  return text;
+  throw lastError || new Error("Gemini request failed for all configured models.");
 }
 
 function extractTextFromGeminiResponse(data) {
