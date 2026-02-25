@@ -53,6 +53,8 @@ class _AiTransactionAssistantSheetState
   bool _busy = false;
   bool _listening = false;
   _ResolvedAction? _pendingAction;
+  AiDecision? _draftDecision;
+  String _localeId = 'en-US';
 
   @override
   void initState() {
@@ -88,13 +90,29 @@ class _AiTransactionAssistantSheetState
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
               subtitle: Text(
-                widget.entryPoint == AiAssistantEntryPoint.tourDashboard
-                    ? 'Tour context enabled.'
-                    : 'Main dashboard context enabled.',
+                '${widget.entryPoint == AiAssistantEntryPoint.tourDashboard ? 'Tour context enabled.' : 'Main dashboard context enabled.'} '
+                'STT: $_localeId',
               ),
-              trailing: IconButton(
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Icons.close_rounded),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  PopupMenuButton<String>(
+                    tooltip: 'Speech language',
+                    onSelected: (value) => setState(() => _localeId = value),
+                    itemBuilder: (context) => const [
+                      PopupMenuItem(
+                        value: 'en-US',
+                        child: Text('English (US)'),
+                      ),
+                      PopupMenuItem(value: 'bn-BD', child: Text('Bangla (BD)')),
+                    ],
+                    icon: const Icon(Icons.translate_rounded),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
               ),
             ),
             const Divider(height: 1),
@@ -219,14 +237,21 @@ class _AiTransactionAssistantSheetState
 
     setState(() => _listening = true);
     await _speech.listen(
+      localeId: _localeId,
+      listenFor: const Duration(seconds: 12),
+      pauseFor: const Duration(seconds: 2),
+      partialResults: false,
+      listenMode: ListenMode.confirmation,
       onResult: (result) {
         if (!mounted) {
           return;
         }
-        _textController.text = result.recognizedWords;
-        _textController.selection = TextSelection.collapsed(
-          offset: _textController.text.length,
-        );
+        if (result.finalResult) {
+          _textController.text = result.recognizedWords;
+          _textController.selection = TextSelection.collapsed(
+            offset: _textController.text.length,
+          );
+        }
       },
     );
   }
@@ -261,25 +286,32 @@ class _AiTransactionAssistantSheetState
         ),
       );
 
-      if (decision.mode == AiAssistantMode.clarify) {
+      final merged = _mergeDecision(_draftDecision, decision, text);
+      _draftDecision = merged;
+
+      final shouldAttemptResolve =
+          merged.mode != AiAssistantMode.clarify ||
+          (merged.main.amount != null || merged.tour.amount != null);
+
+      if (!shouldAttemptResolve) {
         final clarify =
-            decision.clarificationQuestion ??
-            decision.assistantMessage ??
+            merged.clarificationQuestion ??
+            merged.assistantMessage ??
             'Please clarify the transaction details.';
         _appendAssistant(clarify);
         return;
       }
 
-      final resolution = await _resolveDecision(decision, payloadContext);
+      final resolution = await _resolveDecision(merged, payloadContext);
       if (resolution.error != null) {
         _appendAssistant(resolution.error!);
         return;
       }
 
       setState(() => _pendingAction = resolution.action);
-      final modeLabel = decision.mode == AiAssistantMode.main ? 'Main' : 'Tour';
+      final modeLabel = merged.mode == AiAssistantMode.main ? 'Main' : 'Tour';
       final assistantText =
-          decision.assistantMessage ??
+          merged.assistantMessage ??
           'I parsed this as a $modeLabel transaction. Review and confirm.';
       _appendAssistant(assistantText);
     } catch (error) {
@@ -495,7 +527,14 @@ class _AiTransactionAssistantSheetState
         .read(tourRepositoryProvider)
         .getMembers(selectedTour.id);
     final authUser = await ref.read(authStateProvider.future);
+    final contributorHint = decision.tour.contributorName?.trim().toLowerCase();
     final contributor =
+        ((contributorHint == '__me__' ||
+                contributorHint == 'i' ||
+                contributorHint == 'me' ||
+                contributorHint == 'myself')
+            ? members.where((item) => item.userId == authUser?.uid).firstOrNull
+            : null) ??
         _matchByName(
           members,
           (item) => item.name,
@@ -510,11 +549,22 @@ class _AiTransactionAssistantSheetState
       );
     }
 
-    final sharers = decision.tour.sharerNames
-        .map((name) => _matchByName(members, (item) => item.name, name))
-        .whereType<TourMember>()
-        .toSet()
-        .toList(growable: false);
+    final includesAll = decision.tour.sharerNames.any((name) {
+      final n = name.trim().toLowerCase();
+      return n == '__all__' ||
+          n == 'all' ||
+          n == 'everyone' ||
+          n == 'every member' ||
+          n == 'all members';
+    });
+
+    final sharers = includesAll
+        ? List<TourMember>.from(members)
+        : decision.tour.sharerNames
+              .map((name) => _matchByName(members, (item) => item.name, name))
+              .whereType<TourMember>()
+              .toSet()
+              .toList(growable: false);
 
     if (sharers.isEmpty) {
       return const _ResolutionResult(
@@ -546,6 +596,118 @@ class _AiTransactionAssistantSheetState
       _messages.add(AiConversationMessage(role: 'assistant', text: text));
     });
     _scrollToBottom();
+  }
+
+  AiDecision _mergeDecision(
+    AiDecision? previous,
+    AiDecision next,
+    String userText,
+  ) {
+    if (previous == null) {
+      return _applyUserClarificationHints(next, userText);
+    }
+
+    final resolvedMode = next.mode == AiAssistantMode.clarify
+        ? previous.mode
+        : next.mode;
+
+    final mergedMain = AiMainDraft(
+      amount: next.main.amount ?? previous.main.amount,
+      type: next.main.type ?? previous.main.type,
+      accountName: next.main.accountName ?? previous.main.accountName,
+      categoryName: next.main.categoryName ?? previous.main.categoryName,
+      dateIso: next.main.dateIso ?? previous.main.dateIso,
+      note: next.main.note ?? previous.main.note,
+    );
+
+    final mergedSharers = next.tour.sharerNames.isNotEmpty
+        ? next.tour.sharerNames
+        : previous.tour.sharerNames;
+    final mergedTour = AiTourDraft(
+      amount: next.tour.amount ?? previous.tour.amount,
+      tourId: next.tour.tourId ?? previous.tour.tourId,
+      tourName: next.tour.tourName ?? previous.tour.tourName,
+      contributorName:
+          next.tour.contributorName ?? previous.tour.contributorName,
+      sharerNames: mergedSharers,
+      dateIso: next.tour.dateIso ?? previous.tour.dateIso,
+      note: next.tour.note ?? previous.tour.note,
+    );
+
+    final merged = AiDecision(
+      mode: resolvedMode,
+      confidence: next.confidence > 0 ? next.confidence : previous.confidence,
+      missingFields: next.missingFields,
+      clarificationQuestion:
+          next.clarificationQuestion ?? previous.clarificationQuestion,
+      assistantMessage: next.assistantMessage ?? previous.assistantMessage,
+      main: mergedMain,
+      tour: mergedTour,
+    );
+    return _applyUserClarificationHints(merged, userText);
+  }
+
+  AiDecision _applyUserClarificationHints(
+    AiDecision decision,
+    String userText,
+  ) {
+    final text = userText.trim().toLowerCase();
+    if (text.isEmpty) {
+      return decision;
+    }
+
+    final tourSharers = List<String>.from(decision.tour.sharerNames);
+    if ((text.contains('everyone') ||
+            text.contains('every member') ||
+            text.contains('all members') ||
+            text.contains('all of us')) &&
+        tourSharers.isEmpty) {
+      tourSharers.add('__all__');
+    }
+
+    var contributorName = decision.tour.contributorName;
+    if (text == 'i' ||
+        text == 'me' ||
+        text == 'myself' ||
+        text.contains('i did') ||
+        text.contains('i paid')) {
+      contributorName = '__me__';
+    }
+
+    String? dateIso = decision.tour.dateIso;
+    if (dateIso == null || dateIso.isEmpty) {
+      if (text.contains('today')) {
+        final now = DateTime.now();
+        dateIso = DateTime(now.year, now.month, now.day).toIso8601String();
+      } else if (text.contains('yesterday')) {
+        final d = DateTime.now().subtract(const Duration(days: 1));
+        dateIso = DateTime(d.year, d.month, d.day).toIso8601String();
+      }
+    }
+
+    if (tourSharers == decision.tour.sharerNames &&
+        contributorName == decision.tour.contributorName &&
+        dateIso == decision.tour.dateIso) {
+      return decision;
+    }
+
+    return AiDecision(
+      mode: decision.mode,
+      confidence: decision.confidence,
+      missingFields: decision.missingFields,
+      clarificationQuestion: decision.clarificationQuestion,
+      assistantMessage: decision.assistantMessage,
+      main: decision.main,
+      tour: AiTourDraft(
+        amount: decision.tour.amount,
+        tourId: decision.tour.tourId,
+        tourName: decision.tour.tourName,
+        contributorName: contributorName,
+        sharerNames: tourSharers,
+        dateIso: dateIso,
+        note: decision.tour.note,
+      ),
+    );
   }
 
   void _scrollToBottom() {

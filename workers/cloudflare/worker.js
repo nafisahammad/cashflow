@@ -31,7 +31,7 @@ export default {
     try {
       const modelText = await callGemini(env.GEMINI_API_KEY, prompt);
       const parsed = parseModelJson(modelText);
-      const decision = normalizeDecision(parsed);
+      const decision = normalizeDecision(parsed, text, context);
       return json({ decision }, 200);
     } catch (error) {
       return json(
@@ -111,6 +111,7 @@ function buildPrompt(text, context, history) {
   return [
     "You are CashFlow transaction intent router.",
     "Classify into main, tour, or clarify.",
+    "If entryPoint is mainDashboard, force mode=main (do not switch to tour).",
     "If unclear, ask one short clarification question.",
     "Return only JSON, no markdown.",
     "Use only names from context when possible.",
@@ -194,16 +195,19 @@ function parseModelJson(rawText) {
   throw new Error("Model output is not valid JSON");
 }
 
-function normalizeDecision(parsed) {
+function normalizeDecision(parsed, sourceText, context) {
   const modeRaw = safeString(parsed?.mode)?.toLowerCase() || "clarify";
-  const mode = modeRaw === "main" || modeRaw === "tour" ? modeRaw : "clarify";
+  let mode = modeRaw === "main" || modeRaw === "tour" ? modeRaw : "clarify";
+  if ((context?.entryPoint || "") === "mainDashboard") {
+    mode = "main";
+  }
   const missingFields = Array.isArray(parsed?.missingFields)
     ? parsed.missingFields.map((x) => safeString(x)).filter(Boolean)
     : [];
   const main = parsed?.main && typeof parsed.main === "object" ? parsed.main : {};
   const tour = parsed?.tour && typeof parsed.tour === "object" ? parsed.tour : {};
 
-  return {
+  const decision = {
     mode,
     confidence: clamp(toNumber(parsed?.confidence) ?? 0, 0, 1),
     missingFields,
@@ -229,6 +233,45 @@ function normalizeDecision(parsed) {
       note: safeString(tour.note) || null,
     },
   };
+
+  return applyTextHints(decision, sourceText);
+}
+
+function applyTextHints(decision, text) {
+  if (!text) return decision;
+  const t = text.toLowerCase();
+
+  if (decision.mode === "tour") {
+    if (
+      decision.tour.sharerNames.length === 0 &&
+      (t.includes("everyone") ||
+        t.includes("every member") ||
+        t.includes("all members") ||
+        t.includes("all of us") ||
+        t.includes("sobai") ||
+        t.includes("shobai") ||
+        t.includes("sobar") ||
+        t.includes("shobar") ||
+        t.includes("সবাই") ||
+        t.includes("সবাইকে") ||
+        t.includes("সবার"))
+    ) {
+      decision.tour.sharerNames = ["__all__"];
+    }
+
+    if (
+      !decision.tour.contributorName &&
+      (t.includes("paid") || t.includes("payed") || t.includes("spent"))
+    ) {
+      decision.tour.contributorName = "__me__";
+    }
+
+    if (!decision.tour.contributorName && (t.includes("ami") || t.includes("আমি") || t.includes("আমিই"))) {
+      decision.tour.contributorName = "__me__";
+    }
+  }
+
+  return decision;
 }
 
 function normalizeTxType(v) {

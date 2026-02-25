@@ -343,6 +343,16 @@ class OfflineAiTransactionAssistantService
       );
     }
 
+    if (request.entryPoint == AiAssistantEntryPoint.mainDashboard) {
+      return _buildMainDecision(
+        request: request,
+        normalized: normalized,
+        originalText: text,
+        amount: amount,
+        dateIso: dateIso,
+      );
+    }
+
     if (likelyTour ||
         (request.entryPoint == AiAssistantEntryPoint.tourDashboard &&
             request.currentTourId != null)) {
@@ -482,7 +492,10 @@ class OfflineAiTransactionAssistantService
         matchedTour ??
         currentTour ??
         (request.tours.length == 1 ? request.tours.first : null);
-    final sharers = _extractSharers(originalText);
+    var sharers = _extractSharers(originalText);
+    if (sharers.isEmpty && _mentionsAll(originalText)) {
+      sharers = const <String>['__all__'];
+    }
 
     final missing = <String>[];
     if (amount == null || amount <= 0) {
@@ -499,7 +512,7 @@ class OfflineAiTransactionAssistantService
       amount: amount,
       tourId: selectedTour?.id,
       tourName: selectedTour?.name,
-      contributorName: null,
+      contributorName: _mentionsPayer(originalText) ? '__me__' : null,
       sharerNames: sharers,
       dateIso: dateIso,
       note: originalText,
@@ -664,6 +677,7 @@ class OfflineAiTransactionAssistantService
     final patterns = <RegExp>[
       RegExp(r'(?:with|among|between)\s+(.+)$', caseSensitive: false),
       RegExp(r'split\s+with\s+(.+)$', caseSensitive: false),
+      RegExp(r'(?:সাথে|সহ|মধ্যে)\s+(.+)$', caseSensitive: false),
     ];
 
     for (final pattern in patterns) {
@@ -686,6 +700,7 @@ class OfflineAiTransactionAssistantService
           ),
           ' ',
         )
+        .replaceAll(RegExp(r'(আজ|গতকাল|কাল)', caseSensitive: false), ' ')
         .trim();
     if (cleaned.isEmpty || lower.contains('myself only')) {
       return const <String>[];
@@ -749,6 +764,35 @@ bool _containsAny(String text, List<String> needles) {
   return false;
 }
 
+bool _mentionsAll(String text) {
+  final lower = text.toLowerCase();
+  return lower.contains('everyone') ||
+      lower.contains('every member') ||
+      lower.contains('all members') ||
+      lower.contains('all of us') ||
+      lower.contains('sobai') ||
+      lower.contains('shobai') ||
+      lower.contains('sobar') ||
+      lower.contains('shobar') ||
+      lower.contains('সবাই') ||
+      lower.contains('সবাইকে') ||
+      lower.contains('সবার');
+}
+
+bool _mentionsPayer(String text) {
+  final lower = text.toLowerCase();
+  return lower.contains('paid') ||
+      lower.contains('payed') ||
+      lower.contains('spent') ||
+      lower.contains('ami') ||
+      lower.contains('ame') ||
+      lower.contains('ami e') ||
+      lower.contains('আমি') ||
+      lower.contains('আমিই') ||
+      lower.contains('আমি দিয়েছি') ||
+      lower.contains('আমি দিয়েছি');
+}
+
 double? _extractFirstAmount(String text) {
   final matches = RegExp(
     r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?|\d+(?:\.\d+)?)',
@@ -769,6 +813,13 @@ String? _extractDateIso(String normalized) {
     return DateTime(now.year, now.month, now.day).toIso8601String();
   }
   if (normalized.contains('yesterday')) {
+    final d = now.subtract(const Duration(days: 1));
+    return DateTime(d.year, d.month, d.day).toIso8601String();
+  }
+  if (normalized.contains('আজ')) {
+    return DateTime(now.year, now.month, now.day).toIso8601String();
+  }
+  if (normalized.contains('গতকাল')) {
     final d = now.subtract(const Duration(days: 1));
     return DateTime(d.year, d.month, d.day).toIso8601String();
   }
@@ -848,6 +899,12 @@ const _tourKeywords = <String>[
   'split',
   'together',
   'friends',
+  'ভ্রমণ',
+  'ট্যুর',
+  'টুর',
+  'ট্রিপ',
+  'গ্রুপ',
+  'দল',
 ];
 
 const _mainKeywords = <String>['wallet', 'account', 'personal', 'home', 'cash'];
@@ -862,6 +919,10 @@ const _incomeKeywords = <String>[
   'refund',
   'profit',
   'sold',
+  'বেতন',
+  'আয়',
+  'আয়',
+  'রোজগার',
 ];
 
 const _expenseKeywords = <String>[
@@ -877,6 +938,12 @@ const _expenseKeywords = <String>[
   'ticket',
   'fuel',
   'transport',
+  'খরচ',
+  'কেনা',
+  'পরিশোধ',
+  'ভাড়া',
+  'ভাড়া',
+  'বিল',
 ];
 
 final aiTransactionAssistantServiceProvider =
